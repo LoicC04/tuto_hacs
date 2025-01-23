@@ -1,0 +1,14 @@
+{
+    "domain": "tuto_hacs",
+    "name": "Tuto HACS",
+    "codeowners": [
+        "@LoicC04"
+    ],
+    "config_flow": false,
+    "documentation": "https://github.com/LoicC04/tuto_hacs",
+    "issue_tracker": "https://github.com/LoicC04/tuto_hacs/issues",
+    "integration_type": "device",
+    "iot_class": "calculated",
+    "quality_scale": "silver",
+    "version": "3.0.0"
+}
