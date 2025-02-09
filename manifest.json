@@ -4,7 +4,7 @@
     "codeowners": [
         "@LoicC04"
     ],
-    "config_flow": false,
+    "config_flow": true,
     "documentation": "https://github.com/LoicC04/tuto_hacs",
     "issue_tracker": "https://github.com/LoicC04/tuto_hacs/issues",
     "integration_type": "device",

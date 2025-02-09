@@ -1,32 +1,46 @@
-""" Implements the VersatileThermostat sensors component """
+""" Implements the Tuto HACS sensors component """
 import logging
+from datetime import datetime, timedelta
+import voluptuous as vol
 
-from datetime import timedelta, datetime
-from .const import CONF_DEVICE_ID, CONF_NAME, SERVICE_RAZ_COMPTEUR
-from homeassistant.core import HomeAssistant, callback, Event, State
-from homeassistant.helpers.event import async_track_time_interval, async_track_state_change_event
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity_platform import AddEntitiesCallback, async_get_current_platform
 from homeassistant.const import UnitOfTime, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import HomeAssistant, callback, Event, State
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity_platform import (
+    AddEntitiesCallback,
+    async_get_current_platform,
+)
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
     SensorStateClass,
 )
-import voluptuous as vol
+
+from homeassistant.helpers.event import (
+    async_track_time_interval,
+    async_track_state_change_event,
+)
+
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceEntryType
+
 import homeassistant.helpers.config_validation as cv
+
+from .const import (
+    DOMAIN,
+    DEVICE_MANUFACTURER,
+    CONF_NAME,
+    SERVICE_RAZ_COMPTEUR,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_platform(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info=None,  # pylint: disable=unused-argument
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ):
-    """Configuration de la plate-forme tuto_hacs à partir de la configuration
-    trouvée dans configuration.yaml"""
+    """Configuration des entités sensor à partir de la configuration
+    ConfigEntry passée en argument"""
 
     _LOGGER.debug("Calling async_setup_entry entry=%s", entry)
 
@@ -48,6 +62,24 @@ class TutoHacsElapsedSecondEntity(SensorEntity):
 
     _hass: HomeAssistant
 
+    def __init__(
+        self,
+        hass: HomeAssistant,  # pylint: disable=unused-argument
+        config_entry: ConfigEntry,
+    ) -> None:
+        """Initisalisation de notre entité"""
+        self._hass = hass
+        self._attr_has_entity_name = True
+        self._attr_name = config_entry.data.get(CONF_NAME)
+        self._device_id = config_entry.entry_id
+        self._attr_unique_id = self._attr_name + "_seconds"
+        self._attr_native_value = 12
+
+    @property
+    def should_poll(self) -> bool:
+        """Do not poll for those entities"""
+        return False
+
     @property
     def icon(self) -> str | None:
         return "mdi:timer-play"
@@ -65,38 +97,31 @@ class TutoHacsElapsedSecondEntity(SensorEntity):
         return UnitOfTime.SECONDS
 
     @property
-    def should_poll(self) -> bool:
-        """Do not poll for those entities"""
-        return False
-
-    def __init__(
-        self,
-        hass: HomeAssistant,  # pylint: disable=unused-argument
-        entry_infos,  # pylint: disable=unused-argument
-    ) -> None:
-        """Initisalisation de notre entité"""
-        self._hass = hass
-        self._attr_has_entity_name = True
-        self._attr_name = entry_infos.get(CONF_NAME)
-        self._device_id = entry_infos.get(CONF_DEVICE_ID)
-        self._attr_unique_id = self._device_id + "_seconds"
-        self._attr_native_value = 0
+    def device_info(self) -> DeviceInfo:
+        """Donne le lien avec le device. Non utilisé jusqu'au tuto 4"""
+        return DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, self._device_id)},
+            name=self._device_id,
+            manufacturer=DEVICE_MANUFACTURER,
+            model=DOMAIN,
+        )
 
     @callback
     async def async_added_to_hass(self):
-        """Ce callback est appelé lorsque l'entité est ajoutée à HA """
+        """Ce callback est appelé lorsque l'entité est ajoutée à HA"""
 
         # Arme le timer
         timer_cancel = async_track_time_interval(
             self._hass,
-            self.incremente_secondes,   # la méthode qui sera appelée toutes les secondes
+            self._incremente_secondes,  # La methode à appeler périodiquement
             interval=timedelta(seconds=1),
         )
         # desarme le timer lors de la destruction de l'entité
         self.async_on_remove(timer_cancel)
 
     @callback
-    async def incremente_secondes(self, _):
+    async def _incremente_secondes(self, _):
         """Cette méthode va être appelée toutes les secondes"""
         _LOGGER.info("Appel de incremente_secondes à %s", datetime.now())
 
@@ -109,7 +134,7 @@ class TutoHacsElapsedSecondEntity(SensorEntity):
         # Toutes les 5 secondes on envoie un event
         if self._attr_native_value % 5 == 0:
             self._hass.bus.fire(
-                "event_changement_etat_TutoHacsElapsedSecondEntity",
+                "event_changement_etat_TutoHacsElapsedSecondEnity",
                 {"nb_secondes": self._attr_native_value},
             )
 
@@ -131,22 +156,21 @@ class TutoHacsListenEntity(SensorEntity):
     """La classe de l'entité TutoHacs qui écoute la première"""
 
     _hass: HomeAssistant
-    # On va stocker dans cet attribut l'instance de l'entité à écouter
     _entity_to_listen: TutoHacsElapsedSecondEntity
 
     def __init__(
         self,
         hass: HomeAssistant,  # pylint: disable=unused-argument
-        entry_infos,  # pylint: disable=unused-argument
+        config_entry: ConfigEntry,
         entity_to_listen: TutoHacsElapsedSecondEntity,  # L'entité qu'on veut écouter
     ) -> None:
         """Initisalisation de notre entité"""
         self._hass = hass
         self._attr_has_entity_name = True
-        self._device_id = entry_infos.get(CONF_DEVICE_ID)
         # On lui donne un nom et un unique_id différent
-        self._attr_name = entry_infos.get(CONF_NAME) + " Ecouteur"
-        self._attr_unique_id = self._device_id + "_ecouteur"
+        self._device_id = config_entry.entry_id
+        self._attr_name = config_entry.data.get(CONF_NAME) + " Ecouteur"
+        self._attr_unique_id = self._attr_name + "_ecouteur"
         # Pas de valeur tant qu'on n'a pas reçu
         self._attr_native_value = None
         self._entity_to_listen = entity_to_listen
@@ -164,6 +188,17 @@ class TutoHacsListenEntity(SensorEntity):
     def device_class(self) -> SensorDeviceClass | None:
         """Cette entité"""
         return SensorDeviceClass.TIMESTAMP
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Donne le lien avec le device. Non utilisé jusqu'au tuto 4"""
+        return DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, self._device_id)},
+            name=self._device_id,
+            manufacturer=DEVICE_MANUFACTURER,
+            model=DOMAIN,
+        )
 
     @callback
     async def async_added_to_hass(self):
@@ -183,8 +218,8 @@ class TutoHacsListenEntity(SensorEntity):
         """Cette méthode va être appelée à chaque fois que l'entité
         "entity_to_listen" publie un changement d'état"""
 
-        # _LOGGER.info("Appel de _on_event à %s avec l'event %s",
-        #              datetime.now(), event)
+        _LOGGER.info("Appel de _on_event à %s avec l'event %s",
+                     datetime.now(), event)
 
         new_state: State = event.data.get("new_state")
         # old_state: State = event.data.get("old_state")
@@ -192,6 +227,8 @@ class TutoHacsListenEntity(SensorEntity):
         if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             _LOGGER.warning("Pas d'état disponible. Evenement ignoré")
             return
+
+        # state.last_changed.astimezone(self._current_tz)
 
         # On recherche la date de l'event pour la stocker dans notre état
         self._attr_native_value = new_state.last_changed
