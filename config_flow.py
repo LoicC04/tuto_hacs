@@ -77,7 +77,7 @@ class TutoHACSConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # 2ème appel : il y a des user_input -> on stocke le résultat
         _LOGGER.debug(
-            "config_flow step user (2). On a reçu les valeurs: %s", user_input
+            "config_flow step user. On a reçu les valeurs: %s", user_input
         )
         # On mémorise les user_input
         self._user_inputs.update(user_input)
